@@ -20,6 +20,7 @@ public class VideoPlayer
 	private int fps = 24;
 	private int frameCount = 720;
 	private int frameNum = 0;
+	private double scale = 0.13;
 	
 	private byte[][] framesCache;
 	private PlaySound audioPlayer;
@@ -51,7 +52,7 @@ public class VideoPlayer
 
 	    // Buttons
 		JPanel buttonPanel = new JPanel();
-		buttonPanel.setPreferredSize(new Dimension(300, height));
+		buttonPanel.setPreferredSize(new Dimension(400, height));
 	    frame.getContentPane().add(buttonPanel, BorderLayout.EAST);
 		
 		MyButton splitButton = new MyButton("Play");
@@ -71,6 +72,7 @@ public class VideoPlayer
 		
 		loadFrames();
 		loadAudio();
+		loadStrip();
 		
 		play();
 	}
@@ -81,8 +83,21 @@ public class VideoPlayer
 		playAudio();
 	}
 	
+	public void play(int num_of_frame)
+	{
+		this.frameNum = num_of_frame;
+		playVideo();
+		playAudio();
+	}
+	
+	public int getFrameNum()
+	{
+		return this.frameNum;
+	}
+	
 	private void playVideo()
 	{
+		
 		timer = new Timer();
 		drawFrameTask = new DrawFrameTask();
 		timer.schedule(drawFrameTask, 0, 1000 / fps);
@@ -182,6 +197,55 @@ public class VideoPlayer
 	    }
 	}
 	
+	private void loadStrip()
+	{
+		JButton[] button_arr = new JButton[15];
+		JPanel stripPanel = new JPanel();
+		stripPanel.setPreferredSize(new Dimension(width + 300, height / 4));
+	    frame.getContentPane().add(stripPanel, BorderLayout.SOUTH);
+		int count = 0;
+		for (int i = 0; i < frameCount; i += 50)
+		{
+			BufferedImage originalImg = getFrameFromCache(0, 0, width, height, framesCache[i]);
+			
+			//First, sub-sample image to get the right size for the strip
+			BufferedImage newImg;
+			int newWidth = (int) (width * scale);
+    		int newHeight = (int) (height * scale);
+    		newImg = resizeImage(originalImg, newWidth, newHeight, true);
+    		
+    		//Use JButton to make click-able images in the strip
+    		button_arr[count] = new JButton("",new ImageIcon(newImg));
+    		button_arr[count].setPreferredSize(new Dimension(newWidth, newHeight));
+    		button_arr[count].setName(String.valueOf(count));
+    		button_arr[count].addMouseListener(new MouseAdapter() {
+    		      public void mouseClicked(MouseEvent me) {
+    		    	  //System.out.println("CLICKED: " + ((JButton) (me.getSource())).getName());
+    		    	  int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
+    		    	  int num_of_frame = (int) num_of_frame_set * 50;
+    		    	  stop();
+    		    	  //System.out.println("Frame num" + num_of_frame);
+    		    	  play(num_of_frame);
+    		      }
+    		});
+    		stripPanel.add(button_arr[count]);
+    	    frame.pack();
+    	    count++;
+		}
+	}
+	
+	private BufferedImage resizeImage(Image originalImage, int scaledWidth, int scaledHeight, boolean preserveAlpha)
+	{
+		int imageType = preserveAlpha ? BufferedImage.TYPE_INT_RGB : BufferedImage.TYPE_INT_ARGB;
+		BufferedImage scaledImage = new BufferedImage(scaledWidth, scaledHeight, imageType);
+		Graphics2D g = scaledImage.createGraphics();
+		if (preserveAlpha)
+				g.setComposite(AlphaComposite.Src);
+		g.drawImage(originalImage, 0, 0, scaledWidth, scaledHeight, null); 
+		g.dispose();
+		return scaledImage;
+	}
+	
 	private void displayFrame(int fNum)
 	{
 		videoPanel.removeAll();
@@ -249,6 +313,7 @@ public class VideoPlayer
 	{
 		public void run()
 		{
+		
 			if (!EventQueue.isDispatchThread())
 			{
 				EventQueue.invokeLater(this);
