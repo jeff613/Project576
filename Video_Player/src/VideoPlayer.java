@@ -3,6 +3,8 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
+import java.awt.geom.Rectangle2D;
+import java.awt.geom.RectangularShape;
 import java.awt.image.*;
 import java.io.*;
 import java.util.Random;
@@ -14,19 +16,25 @@ public class VideoPlayer
 {
 	private String videoFilePath;
 	private String audioFilePath;
+	private String testStripPath;
 	
 	private int width = 352;
 	private int height = 288;
 	private int fps = 24;
 	private int frameCount = 720;
 	private int frameNum = 0;
-	private double scale = 0.13;
+	private double scale = 0.2;
+	private int frameInterval = 40;
+	private int framesPerStrip = 18;
+	private int stripFrameW = 70;
+	private int stripFrameH = 57;
 	
 	private byte[][] framesCache;
 	private PlaySound audioPlayer;
 	
 	private JFrame frame;
 	private JPanel videoPanel;
+	private JPanel stripPanel;
 	
 	private Timer timer;
 	private DrawFrameTask drawFrameTask;
@@ -47,6 +55,7 @@ public class VideoPlayer
 		// Use a label to display the image
 	    frame = new JFrame();
 	    frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+	    //frame.setLayout(new GridLayout(3, 2));
 	    videoPanel = new JPanel();
 	    frame.getContentPane().add(videoPanel, BorderLayout.CENTER);
 
@@ -199,12 +208,13 @@ public class VideoPlayer
 	
 	private void loadStrip()
 	{
-		JButton[] button_arr = new JButton[15];
-		JPanel stripPanel = new JPanel();
-		stripPanel.setPreferredSize(new Dimension(width + 300, height / 4));
+		JButton[] button_arr = new JButton[18];
+		stripPanel = new JPanel();
+		stripPanel.setPreferredSize(new Dimension(width + 800, (int) (height * 1.5)));
+		stripPanel.setLayout(new GridLayout(0, 18));
 	    frame.getContentPane().add(stripPanel, BorderLayout.SOUTH);
 		int count = 0;
-		for (int i = 0; i < frameCount; i += 50)
+		for (int i = 0; i < frameCount; i += frameInterval)
 		{
 			BufferedImage originalImg = getFrameFromCache(0, 0, width, height, framesCache[i]);
 			
@@ -212,6 +222,7 @@ public class VideoPlayer
 			BufferedImage newImg;
 			int newWidth = (int) (width * scale);
     		int newHeight = (int) (height * scale);
+    		
     		newImg = resizeImage(originalImg, newWidth, newHeight, true);
     		
     		//Use JButton to make click-able images in the strip
@@ -220,18 +231,62 @@ public class VideoPlayer
     		button_arr[count].setName(String.valueOf(count));
     		button_arr[count].addMouseListener(new MouseAdapter() {
     		      public void mouseClicked(MouseEvent me) {
-    		    	  //System.out.println("CLICKED: " + ((JButton) (me.getSource())).getName());
     		    	  int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
-    		    	  int num_of_frame = (int) num_of_frame_set * 50;
+    		    	  int num_of_frame = (int) num_of_frame_set * frameInterval;
     		    	  stop();
     		    	  //System.out.println("Frame num" + num_of_frame);
     		    	  play(num_of_frame);
     		      }
     		});
+    		
+    		button_arr[count].setFocusPainted(false);
+    		button_arr[count].setMargin(new Insets(0, 0, 0, 0));
+    		button_arr[count].setContentAreaFilled(false);
+    		button_arr[count].setBorderPainted(false);
+    		button_arr[count].setOpaque(false);
+    		
     		stripPanel.add(button_arr[count]);
     	    frame.pack();
     	    count++;
 		}
+	}
+	
+	private byte[][] loadStripFromFile(String matchVideo, int width, int height, int frameCount)
+	{
+		byte[][] stripCache = new byte[frameCount][];
+		
+		try
+	    {
+		    File file = new File(matchVideo);
+		    InputStream is = new FileInputStream(file);
+	
+		    long len = file.length();
+		    int frameLen = width * height * 3;
+		    
+		    for (int i = 0; i < frameCount; i++)
+		    {
+		    	int offset = 0;
+		        int numRead = 0;
+		        
+		        stripCache[i] = new byte[frameLen];
+		        
+		        while(offset < frameLen && (numRead = is.read(stripCache[i], offset, frameLen - offset)) >= 0)
+		        {
+		            offset += numRead;
+		        }
+		    }
+		    
+	    }
+		catch (FileNotFoundException e)
+		{
+	      e.printStackTrace();
+	    }
+		catch (IOException e)
+		{
+	      e.printStackTrace();
+	    }
+		
+		return stripCache;
 	}
 	
 	private BufferedImage resizeImage(Image originalImage, int scaledWidth, int scaledHeight, boolean preserveAlpha)
@@ -244,6 +299,61 @@ public class VideoPlayer
 		g.drawImage(originalImage, 0, 0, scaledWidth, scaledHeight, null); 
 		g.dispose();
 		return scaledImage;
+	}
+	
+	private void loadResults(String matchVideo, int matchFrame)
+	{
+		if (matchVideo != "")
+		{
+			byte[][] stripFrames = loadStripFromFile(matchVideo, stripFrameW, stripFrameH, framesPerStrip);
+			JButton[] button_arr = new JButton[framesPerStrip];
+			int count = 0;
+			BufferedImage newImg = null;
+		
+			//Calculate the frame to be selected and the offset
+			int j = (int) (matchFrame / frameInterval) - 1;
+			double div = (double) matchFrame / (double) frameInterval;
+			double rem = div - j - 1;
+			int offset = (int) (stripFrameW * rem);
+		
+			for (int i = 0; i < framesPerStrip; i += 1)
+			{
+				newImg = getFrameFromCache(0, 0, stripFrameW, stripFrameH, stripFrames[i]);
+    		
+				//Use JButton to make click-able images in the strip
+				button_arr[count] = new JButton("",new ImageIcon(newImg));
+				button_arr[count].setPreferredSize(new Dimension(stripFrameW, stripFrameH));
+				button_arr[count].setName(String.valueOf(count));
+				button_arr[count].addMouseListener(new MouseAdapter() {
+					public void mouseClicked(MouseEvent me) {
+    		    	  //int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
+    		    	  //int num_of_frame = (int) num_of_frame_set * frameInterval;
+    		    	  //stop();
+    		    	  //play(num_of_frame);
+    		      }
+				});
+				button_arr[count].setFocusPainted(false);
+				button_arr[count].setMargin(new Insets(0, 0, 0, 0));
+				button_arr[count].setContentAreaFilled(false);
+				button_arr[count].setBorderPainted(false);
+				button_arr[count].setOpaque(false);
+				stripPanel.add(button_arr[count]);
+				frame.pack();
+				count++;
+    	    
+				if (i == j)
+				{
+					RectangularShape rs = new Rectangle();
+					rs.setFrame(offset, 0, stripFrameW, stripFrameH);
+    			
+					Graphics2D g2d = newImg.createGraphics();
+					g2d.setStroke (new BasicStroke(6));
+					g2d.setColor (Color.red);
+					g2d.draw(rs);
+				}
+    	    
+			}
+		}
 	}
 	
 	private void displayFrame(int fNum)
@@ -267,11 +377,11 @@ public class VideoPlayer
 		{			
 			for(int x = xl; x < xl + w; x++)
 			{
-				index = y * width + x;
+				index = y * w + x;
 				byte a = 0;
 				byte r = cache[index];
-				byte g = cache[index + height * width];
-				byte b = cache[index + height * width * 2]; 
+				byte g = cache[index + h * w];
+				byte b = cache[index + h * w * 2]; 
 				
 				int pix = 0xff000000 | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
 				//int pix = ((a << 24) + (r << 16) + (g << 8) + b);
@@ -306,6 +416,10 @@ public class VideoPlayer
 		else if (name.equals("Pause"))
 		{
 			pause();
+		}
+		else if (name.equals("Search"))
+		{
+			loadResults(testStripPath, 256);
 		}
 	}
 	
