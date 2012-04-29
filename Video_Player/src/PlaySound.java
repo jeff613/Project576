@@ -23,6 +23,7 @@ public class PlaySound {
     private AudioInputStream audioInputStream;
     private Clip audioClip;
     private int currentFrame = 0;
+    private long currentTime = 0;
     
     private final int EXTERNAL_BUFFER_SIZE = 524288; // 128Kb
 
@@ -77,17 +78,31 @@ public class PlaySound {
     {
     	audioClip.stop();
     	currentFrame = 0;
+    	currentTime = 0;
     }
     
     public void pause()
     {
     	audioClip.stop();
     	currentFrame = audioClip.getFramePosition();
+    	currentTime = audioClip.getMicrosecondPosition();
     }
     
     public void play()
     {
     	audioClip.setFramePosition(currentFrame);
+    	audioClip.setMicrosecondPosition(currentTime);
     	audioClip.start();
+    }
+    
+    public long getPos() 
+    {
+    	return audioClip.getMicrosecondLength();
+    }
+    
+    public void setPos(long currPos)
+    {
+    	currentTime = currPos;
+    	audioClip.setMicrosecondPosition(currentTime);
     }
 }

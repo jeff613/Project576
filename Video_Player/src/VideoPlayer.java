@@ -8,15 +8,19 @@ import java.awt.geom.RectangularShape;
 import java.awt.image.*;
 import java.io.*;
 import java.util.Random;
+import java.util.StringTokenizer;
 import java.util.Timer;
 import java.util.TimerTask;
 import javax.swing.*;
 
 public class VideoPlayer
 {
+	
+	private String homePath;
 	private String videoFilePath;
 	private String audioFilePath;
 	private String testStripPath;
+	private long microsecondLength;
 	
 	private int width = 352;
 	private int height = 288;
@@ -43,14 +47,16 @@ public class VideoPlayer
 	{
 	   	String videoPath = args[0];
 	   	String audioPath = args[1];
+	   	String testStripPath = args[2];
 	   	
-	   	VideoPlayer player = new VideoPlayer(videoPath, audioPath);
+	   	VideoPlayer player = new VideoPlayer(videoPath, audioPath, testStripPath);
 	}
 	
-	public VideoPlayer(String vPath, String aPath)
+	public VideoPlayer(String vPath, String aPath, String tPath)
 	{
 		videoFilePath = vPath;
 		audioFilePath = aPath;
+		testStripPath = tPath;
 		
 		// Use a label to display the image
 	    frame = new JFrame();
@@ -118,6 +124,7 @@ public class VideoPlayer
 		{
 			timer.cancel();
 			frameNum = 0;
+			audioPlayer.setPos(0);
 			displayFrame(0);
 			timer = null;	
 		}
@@ -168,6 +175,7 @@ public class VideoPlayer
 		}
 
 		audioPlayer = new PlaySound(inputStream);
+		microsecondLength = audioPlayer.getPos();
 	}
 	
 	private void loadFrames()
@@ -234,6 +242,9 @@ public class VideoPlayer
     		    	  int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
     		    	  int num_of_frame = (int) num_of_frame_set * frameInterval;
     		    	  stop();
+    		    	  long currPos = num_of_frame_set * (microsecondLength / framesPerStrip);
+    		    	  audioPlayer.setPos(currPos);
+    		    	  
     		    	  //System.out.println("Frame num" + num_of_frame);
     		    	  play(num_of_frame);
     		      }
@@ -301,11 +312,23 @@ public class VideoPlayer
 		return scaledImage;
 	}
 	
+	private void copyToCache(byte[][] stripFrames)
+	{
+		for (int i = 0; i < stripFrames.length; i++)
+		{
+			for (int j = 0; j < stripFrames[0].length; j++)
+			{
+				this.framesCache[i][j] = stripFrames[i][j];
+			}
+		}
+		
+	}
+	
 	private void loadResults(String matchVideo, int matchFrame)
 	{
 		if (matchVideo != "")
 		{
-			byte[][] stripFrames = loadStripFromFile(matchVideo, stripFrameW, stripFrameH, framesPerStrip);
+			final byte[][] stripFrames = loadStripFromFile(matchVideo, stripFrameW, stripFrameH, framesPerStrip);
 			JButton[] button_arr = new JButton[framesPerStrip];
 			int count = 0;
 			BufferedImage newImg = null;
@@ -326,10 +349,41 @@ public class VideoPlayer
 				button_arr[count].setName(String.valueOf(count));
 				button_arr[count].addMouseListener(new MouseAdapter() {
 					public void mouseClicked(MouseEvent me) {
-    		    	  //int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
-    		    	  //int num_of_frame = (int) num_of_frame_set * frameInterval;
-    		    	  //stop();
-    		    	  //play(num_of_frame);
+						System.out.println("Frame clickes! Changing to new video..");
+						
+						//Momentarily stop the video
+						stop();
+						
+						//Change videoFilePath and audioFilePath
+						StringTokenizer st2 = new StringTokenizer(testStripPath, "/");
+						String stripName = "";
+						homePath = "/";
+						int count_tok = 0;
+						int total_tokens = st2.countTokens();
+						while (st2.hasMoreTokens() && (count_tok < total_tokens))
+						{
+							String curr = st2.nextToken();
+							if (count_tok < (total_tokens - 1))
+								homePath += curr + "/";
+							stripName = curr;
+							count_tok++;
+						}
+						//System.out.println("Count tokens: " + count_tok + " and real count: " + st2.cou);
+						System.out.println("The home path: " + homePath + " and stipName " + stripName + " and the original" + testStripPath);
+						StringTokenizer st = new StringTokenizer(stripName, ".");
+						int num_video = Integer.parseInt(st.nextToken().substring(5));
+						
+						System.out.println("Changing to video number: " + num_video);
+						videoFilePath = homePath + "vdo" + num_video + ".rgb";
+						audioFilePath = homePath + "vdo" + num_video + ".wav";
+						System.out.println("The paths: " + videoFilePath + " and " + count_tok);
+						int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
+						int num_of_frame = (int) num_of_frame_set * frameInterval;
+						
+						loadFrames();
+						//copyToCache(stripFrames);
+						System.out.println("The results: " + num_of_frame_set + " and " + num_of_frame);
+						play(num_of_frame);
     		      }
 				});
 				button_arr[count].setFocusPainted(false);
