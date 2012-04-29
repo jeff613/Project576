@@ -349,15 +349,15 @@ public class VideoPlayer
 				button_arr[count].setName(String.valueOf(count));
 				button_arr[count].addMouseListener(new MouseAdapter() {
 					public void mouseClicked(MouseEvent me) {
-						System.out.println("Frame clickes! Changing to new video..");
+						System.out.println("Frame clicked! Changing to new video..");
 						
 						//Momentarily stop the video
 						stop();
 						
 						//Change videoFilePath and audioFilePath
-						StringTokenizer st2 = new StringTokenizer(testStripPath, "/");
+						StringTokenizer st2 = new StringTokenizer(testStripPath, "\\");
 						String stripName = "";
-						homePath = "/";
+						homePath = "";
 						int count_tok = 0;
 						int total_tokens = st2.countTokens();
 						while (st2.hasMoreTokens() && (count_tok < total_tokens))
@@ -368,21 +368,20 @@ public class VideoPlayer
 							stripName = curr;
 							count_tok++;
 						}
-						//System.out.println("Count tokens: " + count_tok + " and real count: " + st2.cou);
-						System.out.println("The home path: " + homePath + " and stipName " + stripName + " and the original" + testStripPath);
 						StringTokenizer st = new StringTokenizer(stripName, ".");
 						int num_video = Integer.parseInt(st.nextToken().substring(5));
-						
 						System.out.println("Changing to video number: " + num_video);
 						videoFilePath = homePath + "vdo" + num_video + ".rgb";
 						audioFilePath = homePath + "vdo" + num_video + ".wav";
-						System.out.println("The paths: " + videoFilePath + " and " + count_tok);
+						
+						//Set the current frame and audio correctly
 						int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
 						int num_of_frame = (int) num_of_frame_set * frameInterval;
 						
 						loadFrames();
-						//copyToCache(stripFrames);
-						System.out.println("The results: " + num_of_frame_set + " and " + num_of_frame);
+						loadAudio();
+						long currPos = num_of_frame_set * (microsecondLength / framesPerStrip);
+	    		    	audioPlayer.setPos(currPos);
 						play(num_of_frame);
     		      }
 				});
