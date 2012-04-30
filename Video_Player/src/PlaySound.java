@@ -95,14 +95,36 @@ public class PlaySound {
     	audioClip.start();
     }
     
-    public long getPos() 
+    public long getLength() 
     {
     	return audioClip.getMicrosecondLength();
+    }
+    
+    public long getPos() 
+    {
+    	return audioClip.getMicrosecondPosition();
     }
     
     public void setPos(long currPos)
     {
     	currentTime = currPos;
     	audioClip.setMicrosecondPosition(currentTime);
+    }
+    
+    public void flush()
+    {
+    	audioClip.flush();
+    }
+    
+    public void sleep(long miliseconds)
+    {
+    	try {
+    		synchronized (audioClip) {
+    			audioClip.wait(miliseconds);
+    		}
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
     }
 }

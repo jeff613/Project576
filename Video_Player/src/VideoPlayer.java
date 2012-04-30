@@ -174,8 +174,11 @@ public class VideoPlayer
 		    return;
 		}
 
+		if (audioPlayer != null)
+			audioPlayer.flush();
 		audioPlayer = new PlaySound(inputStream);
-		microsecondLength = audioPlayer.getPos();
+		microsecondLength = audioPlayer.getLength();
+		System.out.println("The length will be: " + microsecondLength);
 	}
 	
 	private void loadFrames()
@@ -478,6 +481,8 @@ public class VideoPlayer
 	
 	class DrawFrameTask extends TimerTask
 	{
+		private int count = 0;
+		private int GOP = 1;
 		public void run()
 		{
 		
@@ -492,6 +497,30 @@ public class VideoPlayer
 				if (frameNum == frameCount)
 				{
 					stopVideo();
+				}
+				count++;
+				//Check every other frame if we are out of sync
+				if (count == frameInterval)
+				{
+					long expectedAudioPos = GOP * (frameInterval) * (microsecondLength / frameCount);
+					long actualAudioPos = audioPlayer.getPos();
+					//audioPlayer.setPos(expectedAudioPos);
+					
+					long difference = actualAudioPos - expectedAudioPos;
+					if (difference > 0)
+					{
+						//System.out.println("The expected: " + expectedAudioPos + "the actual pos: " + actualAudioPos);
+						//System.out.println("The difference was: " + difference);
+						if (difference > (((frameInterval) * (microsecondLength / frameCount)) / 20))
+							audioPlayer.sleep((((frameInterval) * (microsecondLength / frameCount)) / 20) / 1000);
+						else
+							audioPlayer.sleep(difference / 1000);
+					}
+					else
+						//System.out.println("The difference was: " + difference);
+					
+					GOP++;
+					count = 0;
 				}
 			}
 		}
