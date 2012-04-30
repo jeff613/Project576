@@ -47,9 +47,9 @@ public class VideoPlayer
 	{
 	   	String videoPath = args[0];
 	   	String audioPath = args[1];
-	   	String testStripPath = args[2];
+	   	//String testStripPath = args[2];
 	   	
-	   	VideoPlayer player = new VideoPlayer(videoPath, audioPath, testStripPath);
+	   	VideoPlayer player = new VideoPlayer(videoPath, audioPath, "");
 	}
 	
 	public VideoPlayer(String vPath, String aPath, String tPath)
