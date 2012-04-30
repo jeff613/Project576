@@ -7,7 +7,9 @@ import java.awt.geom.Rectangle2D;
 import java.awt.geom.RectangularShape;
 import java.awt.image.*;
 import java.io.*;
+import java.util.Arrays;
 import java.util.Random;
+import java.util.Scanner;
 import java.util.StringTokenizer;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -19,7 +21,9 @@ public class VideoPlayer
 	private String homePath;
 	private String videoFilePath;
 	private String audioFilePath;
-	private String testStripPath;
+	private String repoFolderPath;
+	private String[] videoNames;
+	
 	private long microsecondLength;
 	
 	private int width = 352;
@@ -43,20 +47,25 @@ public class VideoPlayer
 	private Timer timer;
 	private DrawFrameTask drawFrameTask;
 	
+	// index data for search
+	private int[][][] colorIndexes;
+	private final int regionCount = 10;	// how many regions we divided color into, keep same as used in offline processor
+	private double[][] colorResult;
+	
 	public static void main(String[] args) 
 	{
 	   	String videoPath = args[0];
 	   	String audioPath = args[1];
-	   	//String testStripPath = args[2];
+	   	String repoPath = args[2];
 	   	
-	   	VideoPlayer player = new VideoPlayer(videoPath, audioPath, "");
+	   	VideoPlayer player = new VideoPlayer(videoPath, audioPath, repoPath);
 	}
 	
-	public VideoPlayer(String vPath, String aPath, String tPath)
+	public VideoPlayer(String vPath, String aPath, String rPath)
 	{
 		videoFilePath = vPath;
 		audioFilePath = aPath;
-		testStripPath = tPath;
+		repoFolderPath = rPath;
 		
 		// Use a label to display the image
 	    frame = new JFrame();
@@ -85,11 +94,65 @@ public class VideoPlayer
 		frame.setVisible(true);
 		frame.setResizable(false);
 		
+		FilenameFilter filter = new FilenameFilter() {
+		    public boolean accept(File dir, String name) {
+		        return name.startsWith("vdo") && name.endsWith(".rgb");
+		    }
+		};
+		File dir = new File(repoFolderPath);
+		videoNames = dir.list(filter);
+		for(int i = 0; i < videoNames.length; i++)
+		{
+			// remove ".rgb"
+			videoNames[i] = videoNames[i].substring(0, videoNames[i].length() - 4);
+		}
+		
+		loadIndexData();
 		loadFrames();
 		loadAudio();
-		loadStrip();
+		loadStripUI();
 		
 		play();
+	}
+	
+	// load index data from folder for search
+	public void loadIndexData()
+	{
+		// only color data for now
+		colorIndexes = new int[videoNames.length][frameCount][regionCount * 3];
+		for(int i = 0; i < videoNames.length; i++)
+		{
+			colorIndexes[i] = loadColorIndex(repoFolderPath + "\\" + videoNames[i] + ".color");
+		}
+	}
+	
+	private int[][] loadColorIndex(String filePath)
+	{
+		Scanner s = null;
+		try 
+		{
+			s = new Scanner(new BufferedReader(new FileReader(filePath)));
+			int histoNum = s.nextInt();
+			int[][] histos = new int[frameCount][3 * histoNum];
+			for(int i = 0; i < frameCount; i++)
+			{
+				for(int j = 0; j < 3 * histoNum; j++)
+				{
+					histos[i][j] = s.nextInt();
+				}
+			}
+			return histos;
+		}
+		catch (FileNotFoundException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return null;
+		}
+		finally
+		{
+			s.close();
+		}
 	}
 	
 	public void play()
@@ -217,7 +280,7 @@ public class VideoPlayer
 	    }
 	}
 	
-	private void loadStrip()
+	private void loadStripUI()
 	{
 		JButton[] button_arr = new JButton[18];
 		stripPanel = new JPanel();
@@ -327,88 +390,90 @@ public class VideoPlayer
 		
 	}
 	
-	private void loadResults(String matchVideo, int matchFrame)
+	private void loadResults(int matchVideo, int matchFrame)
 	{
-		if (matchVideo != "")
+		String pathBase = repoFolderPath + "\\" + videoNames[matchVideo];
+		final String matchVideoPath = pathBase + ".rgb";
+		final String matchAudioPath = pathBase + ".wav";
+		final String matchStripPath = pathBase + ".strip";
+		
+		final byte[][] stripFrames = loadStripFromFile(matchStripPath, stripFrameW, stripFrameH, framesPerStrip);
+		JButton[] button_arr = new JButton[framesPerStrip];
+		int count = 0;
+		BufferedImage newImg = null;
+	
+		//Calculate the frame to be selected and the offset
+		int j = (int) (matchFrame / frameInterval) - 1;
+		double div = (double) matchFrame / (double) frameInterval;
+		double rem = div - j - 1;
+		int offset = (int) (stripFrameW * rem);
+	
+		for (int i = 0; i < framesPerStrip; i += 1)
 		{
-			final byte[][] stripFrames = loadStripFromFile(matchVideo, stripFrameW, stripFrameH, framesPerStrip);
-			JButton[] button_arr = new JButton[framesPerStrip];
-			int count = 0;
-			BufferedImage newImg = null;
+			newImg = getFrameFromCache(0, 0, stripFrameW, stripFrameH, stripFrames[i]);
 		
-			//Calculate the frame to be selected and the offset
-			int j = (int) (matchFrame / frameInterval) - 1;
-			double div = (double) matchFrame / (double) frameInterval;
-			double rem = div - j - 1;
-			int offset = (int) (stripFrameW * rem);
-		
-			for (int i = 0; i < framesPerStrip; i += 1)
+			//Use JButton to make click-able images in the strip
+			button_arr[count] = new JButton("",new ImageIcon(newImg));
+			button_arr[count].setPreferredSize(new Dimension(stripFrameW, stripFrameH));
+			button_arr[count].setName(String.valueOf(count));
+			button_arr[count].addMouseListener(new MouseAdapter() {
+				public void mouseClicked(MouseEvent me) {
+					System.out.println("Frame clicked! Changing to new video..");
+					
+					//Momentarily stop the video
+					stop();
+					
+					//Change videoFilePath and audioFilePath
+					/*StringTokenizer st2 = new StringTokenizer(testStripPath, "\\");
+					String stripName = "";
+					homePath = "";
+					int count_tok = 0;
+					int total_tokens = st2.countTokens();
+					while (st2.hasMoreTokens() && (count_tok < total_tokens))
+					{
+						String curr = st2.nextToken();
+						if (count_tok < (total_tokens - 1))
+							homePath += curr + "/";
+						stripName = curr;
+						count_tok++;
+					}
+					StringTokenizer st = new StringTokenizer(stripName, ".");
+					int num_video = Integer.parseInt(st.nextToken().substring(5));
+					System.out.println("Changing to video number: " + num_video);*/
+					videoFilePath = matchVideoPath;
+					audioFilePath = matchAudioPath;
+					
+					//Set the current frame and audio correctly
+					int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
+					int num_of_frame = (int) num_of_frame_set * frameInterval;
+					
+					loadFrames();
+					loadAudio();
+					long currPos = num_of_frame_set * (microsecondLength / framesPerStrip);
+    		    	audioPlayer.setPos(currPos);
+					play(num_of_frame);
+		      }
+			});
+			button_arr[count].setFocusPainted(false);
+			button_arr[count].setMargin(new Insets(0, 0, 0, 0));
+			button_arr[count].setContentAreaFilled(false);
+			button_arr[count].setBorderPainted(false);
+			button_arr[count].setOpaque(false);
+			stripPanel.add(button_arr[count]);
+			frame.pack();
+			count++;
+	    
+			if (i == j)
 			{
-				newImg = getFrameFromCache(0, 0, stripFrameW, stripFrameH, stripFrames[i]);
-    		
-				//Use JButton to make click-able images in the strip
-				button_arr[count] = new JButton("",new ImageIcon(newImg));
-				button_arr[count].setPreferredSize(new Dimension(stripFrameW, stripFrameH));
-				button_arr[count].setName(String.valueOf(count));
-				button_arr[count].addMouseListener(new MouseAdapter() {
-					public void mouseClicked(MouseEvent me) {
-						System.out.println("Frame clicked! Changing to new video..");
-						
-						//Momentarily stop the video
-						stop();
-						
-						//Change videoFilePath and audioFilePath
-						StringTokenizer st2 = new StringTokenizer(testStripPath, "\\");
-						String stripName = "";
-						homePath = "";
-						int count_tok = 0;
-						int total_tokens = st2.countTokens();
-						while (st2.hasMoreTokens() && (count_tok < total_tokens))
-						{
-							String curr = st2.nextToken();
-							if (count_tok < (total_tokens - 1))
-								homePath += curr + "/";
-							stripName = curr;
-							count_tok++;
-						}
-						StringTokenizer st = new StringTokenizer(stripName, ".");
-						int num_video = Integer.parseInt(st.nextToken().substring(5));
-						System.out.println("Changing to video number: " + num_video);
-						videoFilePath = homePath + "vdo" + num_video + ".rgb";
-						audioFilePath = homePath + "vdo" + num_video + ".wav";
-						
-						//Set the current frame and audio correctly
-						int num_of_frame_set = Integer.parseInt(((JButton) (me.getSource())).getName());
-						int num_of_frame = (int) num_of_frame_set * frameInterval;
-						
-						loadFrames();
-						loadAudio();
-						long currPos = num_of_frame_set * (microsecondLength / framesPerStrip);
-	    		    	audioPlayer.setPos(currPos);
-						play(num_of_frame);
-    		      }
-				});
-				button_arr[count].setFocusPainted(false);
-				button_arr[count].setMargin(new Insets(0, 0, 0, 0));
-				button_arr[count].setContentAreaFilled(false);
-				button_arr[count].setBorderPainted(false);
-				button_arr[count].setOpaque(false);
-				stripPanel.add(button_arr[count]);
-				frame.pack();
-				count++;
-    	    
-				if (i == j)
-				{
-					RectangularShape rs = new Rectangle();
-					rs.setFrame(offset, 0, stripFrameW, stripFrameH);
-    			
-					Graphics2D g2d = newImg.createGraphics();
-					g2d.setStroke (new BasicStroke(6));
-					g2d.setColor (Color.red);
-					g2d.draw(rs);
-				}
-    	    
+				RectangularShape rs = new Rectangle();
+				rs.setFrame(offset, 0, stripFrameW, stripFrameH);
+			
+				Graphics2D g2d = newImg.createGraphics();
+				g2d.setStroke (new BasicStroke(6));
+				g2d.setColor (Color.red);
+				g2d.draw(rs);
 			}
+	    
 		}
 	}
 	
@@ -475,8 +540,95 @@ public class VideoPlayer
 		}
 		else if (name.equals("Search"))
 		{
-			loadResults(testStripPath, 256);
+			pause();
+			colorResult = matchColor();
+			
+			class SearchResult implements Comparable
+			{
+				public int videoIndex;
+				public int matchedFrameIndex;
+				public double matchedFrameDistance;
+				
+				public int compareTo(Object target)
+				{
+					return (int) (matchedFrameDistance - ((SearchResult) target).matchedFrameDistance);
+				}
+			}
+			
+			// find closest frame match in each video
+			SearchResult[] srs = new SearchResult[colorResult.length];
+			for(int i = 0; i < colorResult.length; i++)
+			{
+				srs[i] = new SearchResult();
+				
+				double min = Integer.MAX_VALUE;
+				int index = -1;
+				for(int j = 0; j < colorResult[i].length; j++)
+				{
+					if(colorResult[i][j] < min)
+					{
+						min = colorResult[i][j];
+						index = j;
+					}
+				}
+				
+				srs[i].videoIndex = i;
+				srs[i].matchedFrameDistance = min;
+				srs[i].matchedFrameIndex = index;
+			}
+			
+			Arrays.sort(srs);
+			for(int i = 0; i < srs.length; i++)
+			{
+				loadResults(srs[i].videoIndex, srs[i].matchedFrameIndex);
+			}
 		}
+	}
+	
+	private double[][] matchColor()
+	{
+		int lastSlash = videoFilePath.lastIndexOf("\\");
+		String curVideoName = videoFilePath.substring(lastSlash + 1, videoFilePath.length());
+		int[] curFrameIndex = new int[regionCount * 3];
+		for(int i = 0; i < videoNames.length; i++)
+		{
+			if(videoNames[i].compareTo(curVideoName.substring(0, curVideoName.length() - 4)) == 0)
+			{
+				curFrameIndex = colorIndexes[i][frameNum];
+			}
+		}
+		
+		// calculate distance
+		double[][] result = new double[videoNames.length][frameCount];
+		for(int i = 0; i < colorIndexes.length; i++)
+		{
+			for(int j = 0; j < colorIndexes[i].length; j++)
+			{
+				int[][] hsv = new int[3][regionCount];
+				for(int c = 0; c < regionCount; c++)
+				{
+					hsv[0][c] = colorIndexes[i][j][c];
+					hsv[1][c] = colorIndexes[i][j][c + regionCount];
+					hsv[2][c] = colorIndexes[i][j][c + regionCount + regionCount];
+				}
+				// calculate h, s, v distance, average with some weight
+				result[i][j] = (calculateDistance(hsv[0], curFrameIndex) * 4
+							+ calculateDistance(hsv[1], curFrameIndex)
+							+ calculateDistance(hsv[2], curFrameIndex)) / 6;
+			}
+		}
+		
+		return result;
+	}
+	
+	private double calculateDistance(int[] a, int[] b)
+	{
+		double result = 0;
+		for(int i = 0; i < a.length; i++)
+		{
+			result += Math.pow(a[i] - b[i], 2);
+		}
+		return Math.sqrt(result);
 	}
 	
 	class DrawFrameTask extends TimerTask

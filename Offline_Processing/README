@@ -1,0 +1,6 @@
+how to use
+give argument of the folder where all the vdo.rgb files reside
+click generate strips will generate all vdo.strip files to the folder
+click color indexing will generate all vdo.color files to the folder
+
+and then pass the folder name as the third parameter for the video_player(see readme in Video_Player)

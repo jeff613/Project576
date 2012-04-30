@@ -57,7 +57,6 @@ public class VideoProcessor {
 	public VideoProcessor(String fPath)
 	{
 		folderPath = fPath;
-		loadColorIndex(folderPath + "\\vdo1.color");
 		
 		FilenameFilter filter = new FilenameFilter() {
 		    public boolean accept(File dir, String name) {
@@ -305,35 +304,6 @@ public class VideoProcessor {
         }
         return dis;
     }*/
-	
-	private int[][] loadColorIndex(String filePath)
-	{
-		Scanner s = null;
-		try 
-		{
-			s = new Scanner(new BufferedReader(new FileReader(filePath)));
-			int histoNum = s.nextInt();
-			int[][] histos = new int[frameCount][3 * histoNum];
-			for(int i = 0; i < frameCount; i++)
-			{
-				for(int j = 0; j < 3 * histoNum; j++)
-				{
-					histos[i][j] = s.nextInt();
-				}
-			}
-			return histos;
-		}
-		catch (FileNotFoundException e)
-		{
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return null;
-		}
-		finally
-		{
-			s.close();
-		}
-	}
 	
 	public void colorIndexing() throws IOException
 	{
