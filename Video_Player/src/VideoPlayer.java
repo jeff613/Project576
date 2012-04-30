@@ -36,8 +36,10 @@ public class VideoPlayer
 	private int framesPerStrip = 18;
 	private int stripFrameW = 70;
 	private int stripFrameH = 57;
+	private int maxResults = 4;
 	
 	private byte[][] framesCache;
+	private JButton[] master_button_arr;
 	private PlaySound audioPlayer;
 	
 	private JFrame frame;
@@ -283,6 +285,7 @@ public class VideoPlayer
 	private void loadStripUI()
 	{
 		JButton[] button_arr = new JButton[18];
+		master_button_arr = new JButton[18];
 		stripPanel = new JPanel();
 		stripPanel.setPreferredSize(new Dimension(width + 800, (int) (height * 1.5)));
 		stripPanel.setLayout(new GridLayout(0, 18));
@@ -322,6 +325,7 @@ public class VideoPlayer
     		button_arr[count].setBorderPainted(false);
     		button_arr[count].setOpaque(false);
     		
+    		master_button_arr[count] = button_arr[count];
     		stripPanel.add(button_arr[count]);
     	    frame.pack();
     	    count++;
@@ -401,7 +405,7 @@ public class VideoPlayer
 		JButton[] button_arr = new JButton[framesPerStrip];
 		int count = 0;
 		BufferedImage newImg = null;
-	
+		
 		//Calculate the frame to be selected and the offset
 		int j = (int) (matchFrame / frameInterval) - 1;
 		double div = (double) matchFrame / (double) frameInterval;
@@ -578,7 +582,15 @@ public class VideoPlayer
 			}
 			
 			Arrays.sort(srs);
-			for(int i = 0; i < srs.length; i++)
+			stripPanel.removeAll(); //Clean up the current view
+			//Restore the strip
+			/*
+			for (int i = 0; i < framesPerStrip; i += 1)
+			{
+				stripPanel.add(master_button_arr[i]);
+			}
+			*/
+			for(int i = 0; i < maxResults; i++)
 			{
 				loadResults(srs[i].videoIndex, srs[i].matchedFrameIndex);
 			}
