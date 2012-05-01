@@ -1,18 +1,3 @@
-To run this project you need two parameters:
-
-Location of video file
-Location of audio file
-
-
-To integrate this with color indexing algorithm:
-
-Call the algorithm from the Search button pressed event.
-Once the result is computed, call the 'loadResults' function with the path of the strip to load (full path) and the frame number (0-720) to select.
-The new strip will be loaded and the frame will appear selected.
-
-================================================
-Integrated search
-
 how to use:
 
 use Offline_Processor to generate all .strip(strip files) and .color(color index files) to some folder(see readme in Offline_Processor)
