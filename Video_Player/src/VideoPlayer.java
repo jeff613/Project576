@@ -474,11 +474,12 @@ public class VideoPlayer
 		BufferedImage newImg = null;
 		
 		//Calculate the frame to be selected and the offset
-		int j = (int) (matchFrame / frameInterval) - 1;
+		int j = (int) (matchFrame / frameInterval);
 		double div = (double) matchFrame / (double) frameInterval;
-		double rem = div - j - 1;
+		double rem = div - j;
 		int offset = (int) (stripFrameW * rem);
 	
+		//System.out.println("The matching frame: " + matchFrame + " and the frame to be selected: " + j);
 		for (int i = 0; i < framesPerStrip; i += 1)
 		{
 			newImg = getFrameFromCache(0, 0, stripFrameW, stripFrameH, stripFrames[i]);
@@ -536,6 +537,7 @@ public class VideoPlayer
 	    
 			if (i == j)
 			{
+				//System.out.println("Surrounding the strip at: " + i + " and offset: " + offset);
 				RectangularShape rs = new Rectangle();
 				rs.setFrame(offset, 0, stripFrameW, stripFrameH);
 			
@@ -695,7 +697,6 @@ public class VideoPlayer
 					index = j;
 				}
 			}
-			
 			srs[i].videoIndex = i;
 			srs[i].matchedFrameDistance = min;
 			srs[i].matchedFrameIndex = index;
