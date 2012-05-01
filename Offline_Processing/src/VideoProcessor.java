@@ -8,6 +8,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -27,10 +28,14 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
+import sun.misc.IOUtils;
+
 public class VideoProcessor {
 
 	private String folderPath;
 	private String[] videoFileNames;
+	private String[] audioFileNames;
+	private PlaySound audioPlayer;
 
 	private int width = 352;
 	private int height = 288;
@@ -40,6 +45,10 @@ public class VideoProcessor {
 	
 	private int frameCount = 720;
 	private int interval = 40;
+	private int audioCount = 30030000;
+	private int audioPerFrame = 4170;
+	private FileInputStream audio_stream;
+	private byte[] audio_byte_arr;
 	
 	private int offset_x = 0;
 	private int offset_y = 0;
@@ -66,8 +75,16 @@ public class VideoProcessor {
 		        return name.startsWith("vdo") && name.endsWith(".rgb");
 		    }
 		};
+		
+		FilenameFilter filter_audio = new FilenameFilter() {
+		    public boolean accept(File dir, String name) {
+		        return name.startsWith("vdo") && name.endsWith(".wav");
+		    }
+		};
+		
 		File dir = new File(folderPath);
 		videoFileNames = dir.list(filter);
+		audioFileNames = dir.list(filter_audio);
 		
 		miniWidth = (int) (width * scale);
 		miniHeight = (int) (height * scale);
@@ -142,6 +159,25 @@ public class VideoProcessor {
 		{
 	      e.printStackTrace();
 	    }
+	}
+	
+	private void loadAudio(String fPath)
+	{
+		FileInputStream inputStream;
+		try
+		{
+		    inputStream = new FileInputStream(fPath);
+		    String str = inputStream.toString();
+		    audio_byte_arr = str.getBytes();
+		}
+		catch (FileNotFoundException e)
+		{
+		    e.printStackTrace();
+		    return;
+		}
+
+		audioPlayer = new PlaySound(inputStream);
+		this.audio_stream = inputStream;
 	}
 	
 	private void displayFrame(byte[] img, int w, int h)
@@ -248,6 +284,26 @@ public class VideoProcessor {
 		
 		return (byte) (sum / total);
 	}
+	
+	public int calculateRMSLevel(byte[] audioData)
+    { 
+		//First, add up all the audiodata
+        long sum = 0;
+        for(int i = 0; i < audioData.length; i++)
+            sum = sum + audioData[i];
+ 
+        //Get the average
+        double avg = sum / audioData.length;
+ 
+        double sumMeanSquare = 0;
+        for(int j = 0; j < audioData.length; j++)
+            sumMeanSquare = sumMeanSquare + Math.pow(audioData[j] - avg, 2);
+ 
+        double averageMeanSquare = sumMeanSquare / audioData.length;
+        
+        //Get the RMS
+        return (int)(Math.pow(averageMeanSquare,0.5) + 0.5);
+    }
 	
 	public class GenStripsTask implements Runnable
 	{
@@ -435,8 +491,49 @@ public class VideoProcessor {
 		
 	}
 	
-	public void soundIndexing()
+	public void soundIndexing() throws IOException
 	{
+		final int histoNum = 10;
+		
+		for (int i = 0; i < audioFileNames.length; i++)
+		{
+			String audioPath = folderPath + "\\" + audioFileNames[i];
+			File file = new File(audioPath);
+		    InputStream is = new FileInputStream(file);
+		    
+			String audioIndexPath = audioPath.substring(0, audioPath.length() - 4) + ".audio";
+			FileWriter fos = new FileWriter(audioIndexPath);
+			fos.write(histoNum + " ");
+			int[] histo = new int[frameCount];
+			loadAudio(audioPath);
+			
+			System.out.println("Calculating audio for video: " + audioPath);
+			infoLabel.setText("Calculating audio for video: " + audioPath);
+			
+			byte[] audioData = new byte[is.available()];
+			is.read(audioData);
+			for (int j = 0; j < frameCount; j++)
+			{
+				byte[] audioData2 = new byte[this.audioPerFrame];
+				for (int x = 0; x < this.audioPerFrame; x++)
+					audioData2[x] = audioData[x + offset_x];
+				histo[j] = this.calculateRMSLevel(audioData2);
+				offset_x += this.audioPerFrame;
+			}
+			offset_x = 0;
+			for(int n = 0; n < frameCount ; n++)
+			{
+				fos.write(histo[n] + " ");
+			}
+			//this.offset_x = 0;
+			//this.offset_y = 0;
+			
+			audioPlayer.stop();
+			audioPlayer.flush();
+			fos.close();
+		}
+		
+		infoLabel.setText("sound indexing complete");
 		
 	}
 	
@@ -466,7 +563,12 @@ public class VideoProcessor {
 		}
 		else if (name.equals("Sound Indexing"))
 		{
-			soundIndexing();
+			try {
+				soundIndexing();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 	}
 	

@@ -116,6 +116,11 @@ public class PlaySound {
     	audioClip.flush();
     }
     
+    public float getLevel()
+    {
+    	return audioClip.getLevel();
+    }
+    
     public void sleep(long miliseconds)
     {
     	try {

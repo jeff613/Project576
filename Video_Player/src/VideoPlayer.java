@@ -57,6 +57,9 @@ public class VideoPlayer
 	private int[][] motionIndexes;
 	private double[][] motionResult;
 	
+	private int[][] soundIndexes;
+	private double[][] soundResult;
+	
 	public static void main(String[] args) 
 	{
 	   	String videoPath = args[0];
@@ -136,6 +139,13 @@ public class VideoPlayer
 		{
 			motionIndexes[i] = loadMotionIndex(repoFolderPath + "\\" + videoNames[i] + ".motion");
 		}
+		
+		//load sound data
+		soundIndexes = new int[videoNames.length][frameCount];
+		for(int i = 0; i < videoNames.length; i++)
+		{
+			soundIndexes[i] = loadSoundIndex(repoFolderPath + "\\" + videoNames[i] + ".audio");
+		}
 	}
 	
 	private int[][] loadColorIndex(String filePath)
@@ -168,6 +178,32 @@ public class VideoPlayer
 	}
 	
 	private int[] loadMotionIndex(String filePath)
+	{
+		Scanner s = null;
+		try 
+		{
+			s = new Scanner(new BufferedReader(new FileReader(filePath)));
+			int histoNum = s.nextInt();
+			int[] histos = new int[frameCount];
+			for(int i = 0; i < frameCount; i++)
+			{
+				histos[i] = s.nextInt();
+			}
+			return histos;
+		}
+		catch (FileNotFoundException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return null;
+		}
+		finally
+		{
+			s.close();
+		}
+	}
+	
+	private int[] loadSoundIndex(String filePath)
 	{
 		Scanner s = null;
 		try 
@@ -648,13 +684,40 @@ public class VideoPlayer
 			
 			Arrays.sort(srs_motion);
 			
+			//Finally, get the sound results
+			soundResult = matchSound();
+			
+			// find closest frame match in each video
+			SearchResult[] srs_sound = new SearchResult[soundResult.length];
+			for(int i = 0; i < soundResult.length; i++)
+			{
+				srs_sound[i] = new SearchResult();
+				
+				double min = Integer.MAX_VALUE;
+				int index = -1;
+				for(int j = 0; j < soundResult[i].length; j++)
+				{
+					if(soundResult[i][j] < min)
+					{
+						min = soundResult[i][j];
+						index = j;
+					}
+				}
+				
+				srs_sound[i].videoIndex = i;
+				srs_sound[i].matchedFrameDistance = min;
+				srs_sound[i].matchedFrameIndex = index;
+			}
+			
+			Arrays.sort(srs_sound);
+			
 			stripPanel.removeAll(); //Clean up the current view
 			
 			//Need a way to weight BOTH color and motion 
 			//Leaving motion for now to check results until we can figure out a Utility function
 			for(int i = 0; i < maxResults; i++)
 			{
-				loadResults(srs_motion[i].videoIndex, srs_motion[i].matchedFrameIndex);
+				loadResults(srs_sound[i].videoIndex, srs_sound[i].matchedFrameIndex);
 			}
 		}
 	}
@@ -716,6 +779,34 @@ public class VideoPlayer
 			for(int j = 0; j < motionIndexes[i].length; j++)
 			{
 				result[i][j] = Math.abs(curFrameIndex - motionIndexes[i][j]);
+				
+			}
+		}
+		
+		return result;
+	}
+	
+	private double[][] matchSound()
+	{
+		int lastSlash = videoFilePath.lastIndexOf("\\");
+		String curVideoName = videoFilePath.substring(lastSlash + 1, videoFilePath.length());
+		int curFrameIndex = 0;
+		for(int i = 0; i < videoNames.length; i++)
+		{
+			if(videoNames[i].compareTo(curVideoName.substring(0, curVideoName.length() - 4)) == 0)
+			{
+				curFrameIndex = soundIndexes[i][frameNum];
+			}
+		}
+		
+		//System.out.println("The curFrameIndex is: " + curFrameIndex);
+		// calculate distance
+		double[][] result = new double[videoNames.length][frameCount];
+		for(int i = 0; i < soundIndexes.length; i++)
+		{
+			for(int j = 0; j < soundIndexes[i].length; j++)
+			{
+				result[i][j] = Math.abs(curFrameIndex - soundIndexes[i][j]);
 				
 			}
 		}
