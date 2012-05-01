@@ -54,6 +54,9 @@ public class VideoPlayer
 	private final int regionCount = 10;	// how many regions we divided color into, keep same as used in offline processor
 	private double[][] colorResult;
 	
+	private int[][] motionIndexes;
+	private double[][] motionResult;
+	
 	public static void main(String[] args) 
 	{
 	   	String videoPath = args[0];
@@ -126,6 +129,13 @@ public class VideoPlayer
 		{
 			colorIndexes[i] = loadColorIndex(repoFolderPath + "\\" + videoNames[i] + ".color");
 		}
+		
+		//load motion data
+		motionIndexes = new int[videoNames.length][frameCount];
+		for(int i = 0; i < videoNames.length; i++)
+		{
+			motionIndexes[i] = loadMotionIndex(repoFolderPath + "\\" + videoNames[i] + ".motion");
+		}
 	}
 	
 	private int[][] loadColorIndex(String filePath)
@@ -142,6 +152,32 @@ public class VideoPlayer
 				{
 					histos[i][j] = s.nextInt();
 				}
+			}
+			return histos;
+		}
+		catch (FileNotFoundException e)
+		{
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return null;
+		}
+		finally
+		{
+			s.close();
+		}
+	}
+	
+	private int[] loadMotionIndex(String filePath)
+	{
+		Scanner s = null;
+		try 
+		{
+			s = new Scanner(new BufferedReader(new FileReader(filePath)));
+			int histoNum = s.nextInt();
+			int[] histos = new int[frameCount];
+			for(int i = 0; i < frameCount; i++)
+			{
+				histos[i] = s.nextInt();
 			}
 			return histos;
 		}
@@ -545,6 +581,8 @@ public class VideoPlayer
 		else if (name.equals("Search"))
 		{
 			pause();
+			
+			//First, get color matching results
 			colorResult = matchColor();
 			
 			class SearchResult implements Comparable
@@ -582,17 +620,41 @@ public class VideoPlayer
 			}
 			
 			Arrays.sort(srs);
-			stripPanel.removeAll(); //Clean up the current view
-			//Restore the strip
-			/*
-			for (int i = 0; i < framesPerStrip; i += 1)
+			
+			//Then, get the motion results
+			motionResult = matchMotion();
+			
+			// find closest frame match in each video
+			SearchResult[] srs_motion = new SearchResult[motionResult.length];
+			for(int i = 0; i < motionResult.length; i++)
 			{
-				stripPanel.add(master_button_arr[i]);
+				srs_motion[i] = new SearchResult();
+				
+				double min = Integer.MAX_VALUE;
+				int index = -1;
+				for(int j = 0; j < motionResult[i].length; j++)
+				{
+					if(motionResult[i][j] < min)
+					{
+						min = motionResult[i][j];
+						index = j;
+					}
+				}
+				
+				srs_motion[i].videoIndex = i;
+				srs_motion[i].matchedFrameDistance = min;
+				srs_motion[i].matchedFrameIndex = index;
 			}
-			*/
+			
+			Arrays.sort(srs_motion);
+			
+			stripPanel.removeAll(); //Clean up the current view
+			
+			//Need a way to weight BOTH color and motion 
+			//Leaving motion for now to check results until we can figure out a Utility function
 			for(int i = 0; i < maxResults; i++)
 			{
-				loadResults(srs[i].videoIndex, srs[i].matchedFrameIndex);
+				loadResults(srs_motion[i].videoIndex, srs_motion[i].matchedFrameIndex);
 			}
 		}
 	}
@@ -627,6 +689,34 @@ public class VideoPlayer
 				result[i][j] = (calculateDistance(hsv[0], curFrameIndex) * 4
 							+ calculateDistance(hsv[1], curFrameIndex)
 							+ calculateDistance(hsv[2], curFrameIndex)) / 6;
+			}
+		}
+		
+		return result;
+	}
+	
+	private double[][] matchMotion()
+	{
+		int lastSlash = videoFilePath.lastIndexOf("\\");
+		String curVideoName = videoFilePath.substring(lastSlash + 1, videoFilePath.length());
+		int curFrameIndex = 0;
+		for(int i = 0; i < videoNames.length; i++)
+		{
+			if(videoNames[i].compareTo(curVideoName.substring(0, curVideoName.length() - 4)) == 0)
+			{
+				curFrameIndex = motionIndexes[i][frameNum];
+			}
+		}
+		
+		//System.out.println("The curFrameIndex is: " + curFrameIndex);
+		// calculate distance
+		double[][] result = new double[videoNames.length][frameCount];
+		for(int i = 0; i < motionIndexes.length; i++)
+		{
+			for(int j = 0; j < motionIndexes[i].length; j++)
+			{
+				result[i][j] = Math.abs(curFrameIndex - motionIndexes[i][j]);
+				
 			}
 		}
 		

@@ -40,6 +40,9 @@ public class VideoProcessor {
 	
 	private int frameCount = 720;
 	private int interval = 40;
+	
+	private int offset_x = 0;
+	private int offset_y = 0;
 
 	private byte[][] framesCache;
 
@@ -356,8 +359,79 @@ public class VideoProcessor {
 		infoLabel.setText("color indexing complete");
 	}
 	
-	public void motionIndexing()
+	public byte[] getCurrMacroblock(int frameNumber)
 	{
+		byte[] curr_block = new byte[256];
+		//int[] result = new int[256];
+		//Break up the frame into 16x16 macroblocks
+		int count = 0;
+		for (int x = this.offset_x; x < width * 16; x+= width)
+		{
+			for (int y = x + this.offset_y; y < this.offset_y + 16; y++)
+			{
+				curr_block[count] = framesCache[frameNumber][x + y];
+				count++;
+			}
+		}
+		this.offset_x += 16;
+		this.offset_y += 16;
+		return curr_block;
+	}
+	
+	public int getAverageFrameDiff(BufferedImage img1, BufferedImage img2)
+	{
+		int differences = 0;
+		//int count = 0;
+		for(int i = 0; i < width; i++)
+		{
+			for (int j = 0; j < height; j++)
+			{
+				differences += Math.abs(img1.getRGB(i, j) - img2.getRGB(i, j));
+			}
+		}
+		int result = Math.abs(differences / (width * height));
+		return result;
+	}
+	
+	public void motionIndexing() throws IOException
+	{
+		final int histoNum = 10;
+		
+		for (int i = 0; i < videoFileNames.length; i++)
+		{
+			String videoPath = folderPath + "\\" + videoFileNames[i];
+			File file = new File(videoPath);
+		    InputStream is = new FileInputStream(file);
+			String motionIndexPath = videoPath.substring(0, videoPath.length() - 4) + ".motion";
+			FileWriter fos = new FileWriter(motionIndexPath);
+			fos.write(histoNum + " ");
+			int[] histo = new int[frameCount];
+			histo[0] = 0; //No motion for the first frame
+			loadFrames(videoPath);
+			System.out.println("Calculating motion for video: " + videoPath);
+			infoLabel.setText("Calculating motion for video: " + videoPath);
+			for (int j = 1; j < frameCount; j += 1)
+			{
+				//Get currFrame from cache
+				BufferedImage currImg = getFrameFromCache(0, 0, width, height, width, height, framesCache[j]);
+				
+				//Get prevFrame from cache
+				BufferedImage prevImg = getFrameFromCache(0, 0, width, height, width, height, framesCache[j - 1]);
+				
+				//Get Frame difference
+				histo[j] = getAverageFrameDiff(currImg, prevImg);
+			}
+			for(int n = 0; n < frameCount ; n++)
+			{
+				fos.write(histo[n] + " ");
+			}
+			//this.offset_x = 0;
+			//this.offset_y = 0;
+			
+			fos.close();
+		}
+		
+		infoLabel.setText("motion indexing complete");
 		
 	}
 	
@@ -383,7 +457,12 @@ public class VideoProcessor {
 		}
 		else if (name.equals("Motion Indexing"))
 		{
-			motionIndexing();
+			try {
+				motionIndexing();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 		else if (name.equals("Sound Indexing"))
 		{
