@@ -412,7 +412,9 @@ public class VideoProcessor {
 			}
 			fos.close();
 		}
+		
 		infoLabel.setText("color indexing complete");
+		frame.pack();
 	}
 	
 	public byte[] getCurrMacroblock(int frameNumber)
@@ -488,6 +490,7 @@ public class VideoProcessor {
 		}
 		
 		infoLabel.setText("motion indexing complete");
+		frame.pack();
 		
 	}
 	
@@ -534,11 +537,14 @@ public class VideoProcessor {
 		}
 		
 		infoLabel.setText("sound indexing complete");
-		
+		frame.pack();
 	}
 	
 	public void buttonPressed(String name)
 	{
+		imagePanel.removeAll();
+		infoLabel.setText("Processing");
+		
 		if (name.equals("Generate Strips"))
 		{
 			generateStrips();

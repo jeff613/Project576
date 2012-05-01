@@ -52,13 +52,8 @@ public class VideoPlayer
 	// index data for search
 	private int[][][] colorIndexes;
 	private final int regionCount = 10;	// how many regions we divided color into, keep same as used in offline processor
-	private double[][] colorResult;
-	
 	private int[][] motionIndexes;
-	private double[][] motionResult;
-	
 	private int[][] soundIndexes;
-	private double[][] soundResult;
 	
 	public static void main(String[] args) 
 	{
@@ -618,108 +613,96 @@ public class VideoPlayer
 		{
 			pause();
 			
-			//First, get color matching results
-			colorResult = matchColor();
-			
-			class SearchResult implements Comparable
-			{
-				public int videoIndex;
-				public int matchedFrameIndex;
-				public double matchedFrameDistance;
-				
-				public int compareTo(Object target)
-				{
-					return (int) (matchedFrameDistance - ((SearchResult) target).matchedFrameDistance);
-				}
-			}
-			
-			// find closest frame match in each video
-			SearchResult[] srs = new SearchResult[colorResult.length];
-			for(int i = 0; i < colorResult.length; i++)
-			{
-				srs[i] = new SearchResult();
-				
-				double min = Integer.MAX_VALUE;
-				int index = -1;
-				for(int j = 0; j < colorResult[i].length; j++)
-				{
-					if(colorResult[i][j] < min)
-					{
-						min = colorResult[i][j];
-						index = j;
-					}
-				}
-				
-				srs[i].videoIndex = i;
-				srs[i].matchedFrameDistance = min;
-				srs[i].matchedFrameIndex = index;
-			}
-			
-			Arrays.sort(srs);
-			
-			//Then, get the motion results
-			motionResult = matchMotion();
-			
-			// find closest frame match in each video
-			SearchResult[] srs_motion = new SearchResult[motionResult.length];
-			for(int i = 0; i < motionResult.length; i++)
-			{
-				srs_motion[i] = new SearchResult();
-				
-				double min = Integer.MAX_VALUE;
-				int index = -1;
-				for(int j = 0; j < motionResult[i].length; j++)
-				{
-					if(motionResult[i][j] < min)
-					{
-						min = motionResult[i][j];
-						index = j;
-					}
-				}
-				
-				srs_motion[i].videoIndex = i;
-				srs_motion[i].matchedFrameDistance = min;
-				srs_motion[i].matchedFrameIndex = index;
-			}
-			
-			Arrays.sort(srs_motion);
-			
-			//Finally, get the sound results
-			soundResult = matchSound();
-			
-			// find closest frame match in each video
-			SearchResult[] srs_sound = new SearchResult[soundResult.length];
-			for(int i = 0; i < soundResult.length; i++)
-			{
-				srs_sound[i] = new SearchResult();
-				
-				double min = Integer.MAX_VALUE;
-				int index = -1;
-				for(int j = 0; j < soundResult[i].length; j++)
-				{
-					if(soundResult[i][j] < min)
-					{
-						min = soundResult[i][j];
-						index = j;
-					}
-				}
-				
-				srs_sound[i].videoIndex = i;
-				srs_sound[i].matchedFrameDistance = min;
-				srs_sound[i].matchedFrameIndex = index;
-			}
-			
-			Arrays.sort(srs_sound);
+			SearchResult[] results = search(0);
 			
 			stripPanel.removeAll(); //Clean up the current view
 			
-			//Need a way to weight BOTH color and motion 
-			//Leaving motion for now to check results until we can figure out a Utility function
 			for(int i = 0; i < maxResults; i++)
 			{
-				loadResults(srs_sound[i].videoIndex, srs_sound[i].matchedFrameIndex);
+				loadResults(results[i].videoIndex, results[i].matchedFrameIndex);
 			}
 		}
+	}
+	
+	// 0 Combined
+	// 1 Color only
+	// 2 motion only
+	// 3 sound only
+	private SearchResult[] search(int method)
+	{
+		switch(method)
+		{
+			case 0:
+				double[][] colorDistance = matchColor();
+				double[][] motionDistance = matchMotion();
+				double[][] soundDistance = matchSound();
+				
+				// tune weight here
+				double colorWeight = 0.4;
+				double motionWeight = 0.4;
+				double soundWeight = 0.2;
+				
+				double[][] totalDistance = new double[videoNames.length][frameCount];
+				
+				for(int i = 0; i < videoNames.length; i++)
+				{
+					for(int j = 0; j < frameCount; j++)
+					{
+						totalDistance[i][j] = colorDistance[i][j] * colorWeight
+											+ motionDistance[i][j] * motionWeight
+											+ soundDistance[i][j] * soundWeight;
+					}
+				}
+				return rank(totalDistance);
+			case 1:
+				return rank(matchColor());
+			case 2:
+				return rank(matchMotion());
+			case 3:
+				return rank(matchSound());
+			default:
+				return null;
+		}
+		
+	}
+	
+	class SearchResult implements Comparable
+	{
+		public int videoIndex;
+		public int matchedFrameIndex;
+		public double matchedFrameDistance;
+		
+		public int compareTo(Object target)
+		{
+			return (int) (matchedFrameDistance - ((SearchResult) target).matchedFrameDistance);
+		}
+	}
+	
+	private SearchResult[] rank(double[][] dis)
+	{
+		SearchResult[] srs = new SearchResult[dis.length];
+		for(int i = 0; i < dis.length; i++)
+		{
+			srs[i] = new SearchResult();
+			
+			double min = Integer.MAX_VALUE;
+			int index = -1;
+			for(int j = 0; j < dis[i].length; j++)
+			{
+				if(dis[i][j] < min)
+				{
+					min = dis[i][j];
+					index = j;
+				}
+			}
+			
+			srs[i].videoIndex = i;
+			srs[i].matchedFrameDistance = min;
+			srs[i].matchedFrameIndex = index;
+		}
+		
+		Arrays.sort(srs);
+		return srs;
 	}
 	
 	private double[][] matchColor()
